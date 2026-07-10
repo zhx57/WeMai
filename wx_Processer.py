@@ -5,7 +5,7 @@ import hashlib
 import asyncio
 from datetime import datetime
 from config import MAIBOT_API_URL, PLATFORM_ID
-from maim_message import Router, RouteConfig, TargetConfig, MessageBase, BaseMessageInfo, UserInfo, GroupInfo, Seg
+from maim_message import Router, RouteConfig, TargetConfig, MessageBase, BaseMessageInfo, UserInfo, GroupInfo, Seg, FormatInfo
 import os
 
 
@@ -260,7 +260,10 @@ class MessageProcessor:
         if not receiver:
             additional_config = getattr(message_info, 'additional_config', None)
             if additional_config:
-                target_uid = getattr(additional_config, 'platform_io_target_user_id', None)
+                if isinstance(additional_config, dict):
+                    target_uid = additional_config.get('platform_io_target_user_id')
+                else:
+                    target_uid = getattr(additional_config, 'platform_io_target_user_id', None)
                 if target_uid and target_uid in self._id_to_name:
                     receiver = self._id_to_name[target_uid]
                     logger.info(f"通过 additional_config.platform_io_target_user_id={target_uid} 反查到昵称: {receiver}")
@@ -663,8 +666,8 @@ class MessageProcessor:
             "message_id": message_id,
             "time": timestamp,
             "format_info": {
-                "content_format": "text",
-                "accept_format": "text,emoji"
+                "content_format": ["text"],
+                "accept_format": ["text", "emoji"]
             }
         }
         
@@ -826,7 +829,11 @@ class MessageProcessor:
                 time=message_info_dict["time"],
                 user_info=user_info,
                 group_info=group_info,
-                format_info=message_info_dict["format_info"]
+                format_info=FormatInfo(
+                    content_format=message_info_dict["format_info"].get("content_format"),
+                    accept_format=message_info_dict["format_info"].get("accept_format"),
+                ),
+                additional_config=message_info_dict.get("additional_config"),
             )
             
             # 构建MessageBase对象
