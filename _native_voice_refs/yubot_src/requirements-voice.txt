@@ -1,0 +1,4 @@
+# 语音 / 视觉核实 额外依赖（体积大，走清华源；deploy.ps1 -WithVoice 安装）
+# 原生微信语音气泡 + 自动锁定聊天目标(OCR) 才需要；纯文字/图片不需要。
+easyocr>=1.7           # 视觉目标核实(OCR)，会带 torch(CPU)/opencv/numpy/scikit-image
+sounddevice>=0.4       # 把 TTS 播进虚拟麦克风(VB-CABLE) + 环回诊断

@@ -18,6 +18,7 @@ from config import (
     WX_EXCLUDED_CHATS,
     WX_LISTEN_ALL_IF_EMPTY,
     WX_TARGET_CHATS,
+    NATIVE_VOICE_VOICE_FALLBACK_TO_FILE,
 )
 
 logger = logging.getLogger(__name__)
@@ -208,13 +209,28 @@ class WeChatListener:
 
     def _send(self, receiver, kind, data):
         self._assert_ui_thread()
-        if kind not in {"text", "image", "file"}:
+        if kind not in {"text", "image", "file", "voice"}:
             raise ValueError(f"不支持发送类型: {kind}")
         chat = self._ensure_chatwnd(receiver)
         try:
             if kind == "text":
                 result = chat.SendMsg(data)
                 return result is not False
+            if kind == "voice":
+                try:
+                    # chat._show 已由 _ensure_chatwnd 完成；bridge 本身不依赖控件树。
+                    from native_voice import NativeVoiceSender
+                    return NativeVoiceSender().send(
+                        data, chat_title=receiver, progress_callback=self.heartbeat
+                    )
+                except Exception:
+                    if not NATIVE_VOICE_VOICE_FALLBACK_TO_FILE:
+                        raise
+                    logger.exception("原生语音发送失败，降级为 WAV 文件 target=%s", receiver)
+                    result = chat.SendFiles(data)
+                    if result is False:
+                        raise RuntimeError("原生语音失败且文件降级 SendFiles 返回 False")
+                    return True
             result = chat.SendFiles(data)
             if result is False:
                 raise RuntimeError("SendFiles 返回 False")

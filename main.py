@@ -14,6 +14,7 @@ from config import (
     LOG_FORMAT,
     LOG_LEVEL,
     LOG_MAX_BYTES,
+    NATIVE_VOICE_ENABLED,
     WX_LISTEN_ALL_IF_EMPTY,
     WX_TARGET_CHATS,
     _parse_list,
@@ -102,6 +103,15 @@ async def main(args):
     outbound = not args.wx_to_maibot
     targets = _parse_list(args.target_chats, WX_TARGET_CHATS) if args.target_chats else WX_TARGET_CHATS
     commands = UICommandQueue()
+    if NATIVE_VOICE_ENABLED:
+        from native_voice import detect_wechat_version, warn_if_stale_route
+        status = warn_if_stale_route()
+        version = detect_wechat_version()
+        if version is not None and version < (4, 1, 9, 0):
+            logger.warning("原生语音已启用但微信版本 %s < 4.1.9，将自动降级为文件",
+                           ".".join(map(str, version)))
+        if not status.get("ok"):
+            logger.warning("原生语音环境未就绪，将自动降级为文件: %s", status)
     processor = create_message_processor(
         ui_submit=commands.submit, inbound_enabled=inbound, outbound_enabled=outbound
     )
@@ -146,6 +156,9 @@ async def main(args):
             await asyncio.sleep(0.5)
     finally:
         stop_event.set()
+        if NATIVE_VOICE_ENABLED:
+            from native_voice import restore_all_audio_routes
+            restore_all_audio_routes()
         processor.stop(timeout=15)
         if ui_thread:
             ui_thread.join(timeout=10)

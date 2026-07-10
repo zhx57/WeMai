@@ -76,6 +76,38 @@ PLATFORM_ID = os.getenv('PLATFORM_ID', 'wxauto')
 WX_BOT_NICKNAME = os.getenv('WX_BOT_NICKNAME', '').strip()
 IMAGE_AUTO_DOWNLOAD = _parse_bool(os.getenv('IMAGE_AUTO_DOWNLOAD'), True)
 IMAGE_RECOGNITION_ENABLED = _parse_bool(os.getenv('IMAGE_RECOGNITION_ENABLED'), True)
+
+# 微信 4.1.9+ 原生语音条（默认关闭，缺少环境时不会影响原发送链路）
+NATIVE_VOICE_ENABLED = _parse_bool(os.getenv('NATIVE_VOICE_ENABLED'), False)
+NATIVE_VOICE_VIRTUAL_CAPTURE_KEYWORDS = _parse_list(
+    os.getenv('NATIVE_VOICE_VIRTUAL_CAPTURE_KEYWORDS'),
+    ['cable output', 'vb-audio', 'voicemeeter output'],
+)
+
+def _fraction(name: str, default: float) -> float:
+    raw = os.getenv(name, str(default))
+    try:
+        value = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} 必须是小数，当前值: {raw!r}") from exc
+    if not 0.0 <= value <= 1.0:
+        raise ValueError(f"{name} 必须在 0..1 范围内，当前值: {value}")
+    return value
+
+
+NATIVE_VOICE_VOICE_START_X = _fraction('NATIVE_VOICE_VOICE_START_X', 0.863)
+NATIVE_VOICE_VOICE_START_Y = _fraction('NATIVE_VOICE_VOICE_START_Y', 0.955)
+NATIVE_VOICE_VOICE_CANCEL_X = _fraction('NATIVE_VOICE_VOICE_CANCEL_X', 0.734)
+NATIVE_VOICE_VOICE_CANCEL_Y = _fraction('NATIVE_VOICE_VOICE_CANCEL_Y', 0.955)
+NATIVE_VOICE_VOICE_SEND_X = _fraction('NATIVE_VOICE_VOICE_SEND_X', 0.947)
+NATIVE_VOICE_VOICE_SEND_Y = _fraction('NATIVE_VOICE_VOICE_SEND_Y', 0.955)
+NATIVE_VOICE_REQUIRE_CONTENT_PROVEN = _parse_bool(
+    os.getenv('NATIVE_VOICE_REQUIRE_CONTENT_PROVEN'), False
+)
+NATIVE_VOICE_VOICE_FALLBACK_TO_FILE = _parse_bool(
+    os.getenv('NATIVE_VOICE_VOICE_FALLBACK_TO_FILE'), True
+)
+NATIVE_VOICE_WAV_DIR = os.getenv('NATIVE_VOICE_WAV_DIR', '').strip()
 def _bounded_int(name: str, default: int, maximum: int) -> int:
     raw = os.getenv(name, str(default))
     try:
@@ -87,6 +119,9 @@ def _bounded_int(name: str, default: int, maximum: int) -> int:
     return value
 
 
+NATIVE_VOICE_MAX_RECORD_SECONDS = _bounded_int(
+    'NATIVE_VOICE_MAX_RECORD_SECONDS', 55, 600
+)
 MAX_MEDIA_BYTES = _bounded_int('MAX_MEDIA_BYTES', 10 * 1024 * 1024, 1024 * 1024 * 1024)
 SEND_QUEUE_SIZE = _bounded_int('SEND_QUEUE_SIZE', 100, 100000)
 UI_QUEUE_SIZE = _bounded_int('UI_QUEUE_SIZE', 100, 10000)

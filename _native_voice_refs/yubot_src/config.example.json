@@ -1,0 +1,330 @@
+{
+  "wechat": {
+    "driver": "dry_run",
+    "dry_run": true,
+    "default_chat": "文件传输助手",
+    "allowed_chats": [
+      "文件传输助手"
+    ],
+    "allow_voice_file_fallback": false,
+    "send_delay_seconds": 0.45,
+    "channels": {
+      "pc_weixin": {
+        "driver": "wxauto",
+        "enabled": false,
+        "notes": "PC 微信 4.x UI 自动化通道"
+      },
+      "android_phone": {
+        "driver": "android_appium",
+        "enabled": false,
+        "appium_server": "http://127.0.0.1:4723",
+        "device_udid": "",
+        "package_name": "com.tencent.mm",
+        "notes": "手机端微信/模拟器通道，适合语音气泡和通话 UI"
+      },
+      "cloud_bridge": {
+        "driver": "http_bridge",
+        "enabled": false,
+        "endpoint": "",
+        "shared_secret_env": "WECHAT_CLOUD_BRIDGE_SECRET",
+        "notes": "云端后端转发到本机或手机桥接器"
+      },
+      "wechat_link": {
+        "driver": "link_gateway",
+        "enabled": false,
+        "base_url": "https://ilinkai.weixin.qq.com",
+        "token_env": "WECHAT_LINK_TOKEN",
+        "shared_secret_env": "WECHAT_LINK_SECRET",
+        "notes": "cc-connect/link/ilink 或同类三方网关接口预留"
+      },
+      "cloud_queue": {
+        "driver": "cloud_queue",
+        "enabled": false,
+        "notes": "云服务器推荐模式：桥接器主动轮询队列，适合 NAT 后的电脑和手机"
+      }
+    }
+  },
+  "connectors": {
+    "pc_weixin": {
+      "type": "pc_weixin",
+      "platform": "windows_wechat",
+      "driver": "wxauto",
+      "enabled": false,
+      "account_id": "wechat-main",
+      "notes": "PC 微信 4.x UI 自动化连接器"
+    },
+    "android_phone": {
+      "type": "android_phone",
+      "platform": "android_wechat",
+      "driver": "android_appium",
+      "enabled": false,
+      "account_id": "wechat-main",
+      "appium_server": "http://127.0.0.1:4723",
+      "device_udid": "",
+      "notes": "Android 真机/模拟器连接器，适合语音气泡、动画表情和通话 UI"
+    },
+    "ios_phone": {
+      "type": "ios_phone",
+      "platform": "ios_wechat",
+      "driver": "ios_wda",
+      "enabled": false,
+      "account_id": "wechat-main",
+      "wda_url": "",
+      "bundle_id": "com.tencent.xin",
+      "notes": "iOS 连接器预留；通常需要 Mac + WebDriverAgent、辅助自动化或越狱环境"
+    },
+    "wechat_link": {
+      "type": "wechat_link",
+      "platform": "personal_wechat_link",
+      "driver": "link_gateway",
+      "enabled": false,
+      "account_id": "wechat-main",
+      "base_url": "https://ilinkai.weixin.qq.com",
+      "token_env": "WECHAT_LINK_TOKEN",
+      "route_tag_env": "WECHAT_LINK_ROUTE_TAG",
+      "shared_secret_env": "WECHAT_LINK_SECRET",
+      "capabilities": {
+        "text_in": "ready",
+        "text_out": "ready",
+        "image_in": "ready",
+        "image_out": "likely",
+        "file_in": "needs-live-test",
+        "file_out": "needs-live-test",
+        "voice_in": "asr-or-cdn-dependent",
+        "voice_out": "reserved-unsupported-now",
+        "voice_out_contract": "voice action is reserved; set voice_out=ready when the gateway opens native voice send",
+        "animated_sticker_out": "unsupported-or-gif-fallback",
+        "realtime_voice": "unsupported"
+      },
+      "notes": "cc-connect/link/ilink 或同类三方网关接口预留；能力由上游网关实际放行决定"
+    },
+    "weflow": {
+      "type": "weflow",
+      "platform": "windows_wechat_weflow",
+      "driver": "weflow_sse",
+      "enabled": false,
+      "account_id": "wechat-main",
+      "target_connector_id": "pc_weixin",
+      "status": "inbound-ready",
+      "capabilities": {
+        "text_in": "ready-sse",
+        "media_in": "ready-sse-media",
+        "text_out": "unsupported-by-weflow",
+        "image_in": "ready-sse-media",
+        "image_out": "unsupported-by-weflow",
+        "voice_in": "ready-sse-media",
+        "voice_out": "unsupported-by-weflow",
+        "animated_sticker_in": "ready-sse-media",
+        "animated_sticker_out": "unsupported-by-weflow",
+        "realtime_voice": "unsupported"
+      },
+      "notes": "WeFlow SSE 入站监听；文字、图片、语音、动画表情都作为同一条入站消息接收，并附带可用状态与来源引用。出站由 PC/手机/网关连接器执行"
+    },
+    "onebot_v11": {
+      "type": "onebot_v11",
+      "platform": "onebot_v11",
+      "driver": "http_bridge",
+      "enabled": false,
+      "account_id": "wechat-main",
+      "target_connector_id": "pc_weixin",
+      "capabilities": {
+        "text_in": "ready",
+        "text_out": "ready",
+        "image_in": "ready",
+        "image_out": "bridge-dependent",
+        "voice_in": "record-segment",
+        "voice_out": "bridge-and-target-dependent",
+        "animated_sticker_out": "image-or-face-segment",
+        "realtime_voice": "unsupported"
+      },
+      "notes": "OneBot v11 兼容层，方便 AstrBot/Akasha/aiocqhttp 生态接入；微信原生媒体能力仍取决于实际连接器"
+    },
+    "openclaw_weixin": {
+      "type": "openclaw_weixin",
+      "platform": "personal_wechat_openclaw",
+      "driver": "astrbot_or_gateway",
+      "enabled": false,
+      "account_id": "wechat-main",
+      "status": "reserved",
+      "capabilities": {
+        "text_in": "ready-via-adapter",
+        "text_out": "ready-via-adapter",
+        "image_in": "ready-via-adapter",
+        "image_out": "ready-via-adapter",
+        "video_in": "ready-via-adapter",
+        "video_out": "ready-via-adapter",
+        "file_in": "ready-via-adapter",
+        "file_out": "ready-via-adapter",
+        "voice_in": "transcribed-by-wechat-cloud",
+        "voice_out": "unsupported-by-openclaw-now",
+        "animated_sticker_out": "unproven",
+        "realtime_voice": "unsupported"
+      },
+      "notes": "AstrBot 个人微信/openclaw-weixin 路线预留；扫码登录+长轮询更适合云端在线，但文档显示不能发送原生语音"
+    },
+    "protocol_gateway": {
+      "type": "protocol_gateway",
+      "platform": "personal_wechat_protocol",
+      "driver": "http_bridge",
+      "enabled": false,
+      "account_id": "wechat-main",
+      "endpoint": "",
+      "shared_secret_env": "WECHAT_PROTOCOL_GATEWAY_SECRET",
+      "notes": "第三方/非官方个人微信协议网关，账号风控风险需要单独确认"
+    },
+    "official_account": {
+      "type": "official_account",
+      "platform": "wechat_official_account",
+      "driver": "http_bridge",
+      "enabled": false,
+      "account_id": "",
+      "app_id_env": "WECHAT_OFFICIAL_APP_ID",
+      "app_secret_env": "WECHAT_OFFICIAL_APP_SECRET",
+      "notes": "公众号客服消息等官方接口，适合可接受公众号入口的场景"
+    },
+    "work_wechat": {
+      "type": "work_wechat",
+      "platform": "wecom",
+      "driver": "http_bridge",
+      "enabled": false,
+      "account_id": "",
+      "corp_id_env": "WECOM_CORP_ID",
+      "secret_env": "WECOM_SECRET",
+      "notes": "企业微信/WeCom 官方接口，适合企业身份或内部通讯场景"
+    },
+    "cloud_queue": {
+      "type": "cloud_queue",
+      "platform": "control_plane",
+      "driver": "cloud_queue",
+      "enabled": true,
+      "notes": "云端队列能力；PC/Android/iOS/协议网关连接器都通过 poll/ack 接入"
+    }
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8899,
+    "public_base_url": "",
+    "shared_secret_env": "WECHAT_AGENT_SECRET",
+    "data_dir": ".data"
+  },
+  "persona": {
+    "backend_url": "http://127.0.0.1:8765",
+    "context_path": "/api/context",
+    "max_context_chars": 120000,
+    "local_root": "",
+    "format": "he_laoshi_skillmem_v1",
+    "prefer_local": true
+  },
+  "agent": {
+    "mode": "dry_run",
+    "base_url": "",
+    "api_key_env": "AGENT_API_KEY",
+    "model": "",
+    "timeout_seconds": 60,
+    "temperature": 0.8,
+    "split_replies": true,
+    "auto_reply_enabled": false,
+    "auto_reply_mode": "auto",
+    "auto_reply_interval_seconds": 2.0,
+    "auto_reply_limit": 3,
+    "system_prompt": "你是接入微信的本地人格 agent。根据人格上下文自然回复。可返回 JSON: {\"actions\":[{\"type\":\"text\",\"text\":\"...\"},{\"type\":\"voice\",\"voice_text\":\"...\"},{\"type\":\"animated_sticker\",\"path\":\"C:\\\\path\\\\to\\\\sticker.gif\"}]}。如果不需要媒体，直接返回普通文本。"
+  },
+  "media": {
+    "voice_output_dir": ".data\\voices",
+    "ffmpeg_path": "",
+    "tts": {
+      "provider": "openai_compatible",
+      "base_url": "",
+      "api_key_env": "TTS_API_KEY",
+      "model": "tts-1",
+      "voice": "alloy",
+      "response_format": "mp3",
+      "timeout_seconds": 60
+    },
+    "stickers": {
+      "default": ""
+    }
+  },
+  "router": {
+    "wake_words": [
+      "/he-laoshi",
+      "何老师",
+      "何茜"
+    ],
+    "call_triggers": [
+      "/call",
+      "打电话",
+      "语音通话"
+    ],
+    "voice_triggers": [
+      "/voice",
+      "发语音"
+    ],
+    "sticker_triggers": [
+      "/sticker",
+      "发个表情"
+    ]
+  },
+  "integrations": {
+    "profile": "local_supervisor",
+    "mode": "orchestrated",
+    "notes": "Better integrated stack: Adapter as control plane, AstrBot as agent platform, Akasha/WeFlow as WeChat bridge reference, OneBot as interop protocol.",
+    "components": {
+      "adapter_backend": {
+        "name": "WeChat Agent Adapter",
+        "role": "control_plane",
+        "type": "local_http",
+        "enabled": true,
+        "endpoint": "http://127.0.0.1:8899/api/status",
+        "port": 8899,
+        "start_command": ".\\start-test-ui.ps1 -Port 8899",
+        "stop_command": ".\\stop-test-ui.ps1 -Port 8899",
+        "notes": "Unified WebUI, whitelist, auth, normalized events, media capability labels and outbound queues."
+      },
+      "astrbot": {
+        "name": "AstrBot",
+        "role": "agent_platform",
+        "type": "external_app",
+        "enabled": false,
+        "path": "C:\\path\\to\\AstrBot",
+        "ws_url": "ws://127.0.0.1:6199/ws",
+        "notes": "Agent/plugin/model platform. Point this to your local AstrBot portable or source bundle before enabling."
+      },
+      "akasha_wechat": {
+        "name": "Akasha-WeChat",
+        "role": "wechat_bridge",
+        "type": "external_app",
+        "enabled": false,
+        "path": "C:\\path\\to\\Akasha-WeChat-or-reference-bundle",
+        "notes": "WeFlow/SSE/UIA bridge reference. The adapter should absorb useful connector logic instead of vendoring the whole app."
+      },
+      "weflow": {
+        "name": "WeFlow API",
+        "role": "wechat_desktop_api",
+        "type": "local_http",
+        "enabled": false,
+        "endpoint": "http://127.0.0.1:5031",
+        "port": 5031,
+        "start_command": ".\\start-weflow-bridge.ps1",
+        "stop_command": ".\\stop-weflow-bridge.ps1",
+        "notes": "Desktop WeChat API service used by Akasha-style bridges; this adapter consumes SSE inbound only."
+      },
+      "onebot_ws_bridge": {
+        "name": "OneBot Reverse WS Bridge",
+        "role": "protocol_bridge",
+        "type": "local_ws",
+        "enabled": false,
+        "ws_url": "ws://127.0.0.1:6199/ws",
+        "start_command": ".\\start-onebot-ws-bridge.ps1",
+        "stop_command": ".\\stop-onebot-ws-bridge.ps1",
+        "notes": "Push adapter inbound events to AstrBot and forward AstrBot send_msg actions back into adapter queues."
+      }
+    }
+  },
+  "cloud": {
+    "enabled": true,
+    "mode": "control_plane",
+    "queue_dir": ".data\\cloud-queue",
+    "notes": "上传云服务器时，云端负责 Web UI/API/入站归一化/出站队列；PC、Android、iOS 或协议网关连接器负责真正操作微信。"
+  }
+}

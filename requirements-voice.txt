@@ -1,0 +1,6 @@
+# 可选：仅 NATIVE_VOICE_ENABLED=true 时需要
+sounddevice>=0.4
+numpy>=1.24
+
+# 非 WAV/压缩音频转换依赖系统 ffmpeg 可执行文件，不是 Python 包。
+# easyocr 不是硬依赖；当前版本使用截图差异验证录音 UI 状态。

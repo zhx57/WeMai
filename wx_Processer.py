@@ -15,6 +15,9 @@ import sqlite3
 import tempfile
 import threading
 import time
+import subprocess
+import urllib.request
+import wave
 from concurrent.futures import CancelledError as FutureCancelledError
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from pathlib import Path
@@ -38,6 +41,9 @@ from config import (
     IMAGE_RECOGNITION_ENABLED,
     MAIBOT_API_URL,
     MAX_MEDIA_BYTES,
+    NATIVE_VOICE_ENABLED,
+    NATIVE_VOICE_MAX_RECORD_SECONDS,
+    NATIVE_VOICE_WAV_DIR,
     PLATFORM_ID,
     SEND_QUEUE_SIZE,
     WX_BOT_NICKNAME,
@@ -201,8 +207,13 @@ class MessageProcessor:
             try:
                 if not self.ui_submit:
                     raise RuntimeError("UI 命令执行器尚未绑定")
+                timeout = 15
+                if kind == "voice":
+                    # 原生录制按音频时长实时进行；命令开始后必须等待其清理/恢复完成。
+                    from native_voice import wav_duration
+                    timeout = min(NATIVE_VOICE_MAX_RECORD_SECONDS, wav_duration(data)) + 20
                 ok = await asyncio.to_thread(
-                    self.ui_submit, "send", receiver, kind, data, timeout=15)
+                    self.ui_submit, "send", receiver, kind, data, timeout=timeout)
                 if ok is not True:
                     raise RuntimeError("wxauto 返回发送失败")
                 logger.info("消息已发送 target=%s type=%s", receiver, kind)
@@ -270,9 +281,21 @@ class MessageProcessor:
             path = self._normalize_file(data)
             await self._queue_outbound(receiver, "file", path)
             return
+        if seg_type == "voice" and NATIVE_VOICE_ENABLED:
+            path, temporary = self._prepare_voice(data)
+            try:
+                await self._queue_outbound(receiver, "voice", path)
+            finally:
+                if temporary:
+                    try:
+                        os.unlink(path)
+                    except OSError:
+                        logger.warning("临时语音清理失败 path=%s", path, exc_info=True)
+            return
         if seg_type == "at":
             data = f"[@{self._text(data)}]"
         elif seg_type == "voice":
+            # 默认关闭时维持历史行为，避免改变既有部署。
             data = "[语音消息]"
         elif seg_type not in {"text", "emoji"}:
             logger.error("拒绝未知消息段 type=%s", seg_type)
@@ -326,6 +349,117 @@ class MessageProcessor:
         with os.fdopen(fd, "wb") as stream:
             stream.write(raw)
         return path, True
+
+    def _prepare_voice(self, data):
+        """把 path / URL / base64 voice 段安全落地为 16-bit PCM WAV。"""
+        source = data
+        if isinstance(data, dict):
+            source = (data.get("path") or data.get("url") or data.get("base64") or
+                      data.get("audio") or data.get("data"))
+        if not isinstance(source, str) or not source.strip():
+            raise ValueError("voice segment 缺少 path/url/base64 数据")
+        source = source.strip()
+        cleanup_source = False
+        input_path = None
+        try:
+            if os.path.isfile(source):
+                if os.path.getsize(source) > MAX_MEDIA_BYTES:
+                    raise ValueError("语音文件超过尺寸上限")
+                input_path = source
+            elif source.startswith(("http://", "https://")):
+                input_path = self._download_voice(source)
+                cleanup_source = True
+            else:
+                encoded = source.split(",", 1)[1] if source.startswith("data:audio/") and "," in source else source
+                if len(encoded) > ((MAX_MEDIA_BYTES + 2) // 3) * 4 + 16:
+                    raise ValueError("base64 语音超过尺寸上限")
+                try:
+                    raw = base64.b64decode(encoded, validate=True)
+                except (binascii.Error, ValueError) as exc:
+                    raise ValueError("无效 voice base64 或不存在的文件路径") from exc
+                if not raw or len(raw) > MAX_MEDIA_BYTES:
+                    raise ValueError("语音数据为空或超过尺寸上限")
+                fd, input_path = tempfile.mkstemp(prefix="wemai_voice_src_")
+                with os.fdopen(fd, "wb") as stream:
+                    stream.write(raw)
+                cleanup_source = True
+            output_dir = NATIVE_VOICE_WAV_DIR or None
+            if output_dir:
+                Path(output_dir).mkdir(parents=True, exist_ok=True)
+            fd, output_path = tempfile.mkstemp(prefix="wemai_voice_", suffix=".wav", dir=output_dir)
+            os.close(fd)
+            try:
+                self._convert_to_wav(input_path, output_path)
+            except Exception:
+                try:
+                    os.unlink(output_path)
+                except OSError:
+                    pass
+                raise
+            return output_path, True
+        finally:
+            if cleanup_source and input_path:
+                try:
+                    os.unlink(input_path)
+                except OSError:
+                    pass
+
+    @staticmethod
+    def _download_voice(url):
+        request = urllib.request.Request(url, headers={"User-Agent": "WeMai/1.0"})
+        fd, path = tempfile.mkstemp(prefix="wemai_voice_download_")
+        try:
+            with urllib.request.urlopen(request, timeout=15) as response, os.fdopen(fd, "wb") as output:
+                length = response.headers.get("Content-Length")
+                if length and int(length) > MAX_MEDIA_BYTES:
+                    raise ValueError("远程语音超过尺寸上限")
+                total = 0
+                while True:
+                    chunk = response.read(65536)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > MAX_MEDIA_BYTES:
+                        raise ValueError("远程语音超过尺寸上限")
+                    output.write(chunk)
+            return path
+        except Exception:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+            raise
+
+    @staticmethod
+    def _convert_to_wav(input_path, output_path):
+        # 即使输入是 WAV 也统一规范成 PortAudio 后端接受的 PCM s16le。
+        command = ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(input_path),
+                   "-acodec", "pcm_s16le", "-ar", "48000", "-ac", "1", str(output_path)]
+        try:
+            result = subprocess.run(command, capture_output=True, timeout=30, check=False)
+        except FileNotFoundError as exc:
+            # 标准 PCM WAV 不需要外部转换器，直接验证并复制。
+            try:
+                with wave.open(str(input_path), "rb") as audio:
+                    valid = audio.getsampwidth() == 2 and audio.getnchannels() in (1, 2)
+            except (wave.Error, OSError):
+                valid = False
+            if not valid:
+                raise RuntimeError("非 PCM WAV 语音转换需要系统安装 ffmpeg") from exc
+            import shutil
+            shutil.copyfile(input_path, output_path)
+            return
+        if result.returncode != 0:
+            detail = result.stderr.decode("utf-8", errors="replace")[-500:]
+            raise ValueError(f"语音转换 WAV 失败: {detail}")
+        from native_voice import wav_duration
+        duration = wav_duration(output_path)
+        if duration <= 0 or duration > NATIVE_VOICE_MAX_RECORD_SECONDS:
+            raise ValueError(f"语音时长 {duration:.2f}s 超出允许范围")
 
     @staticmethod
     def _validate_image(header):
